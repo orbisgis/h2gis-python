@@ -1,0 +1,4 @@
+# MANIFEST.in
+include README.md
+recursive-include h2gis/lib *.so *.dll *.dylib
+recursive-include docs *.md

@@ -1,0 +1,5 @@
+.eggs/**
+.idea/**
+build/**
+h2gis/lib/**
+dist/**
