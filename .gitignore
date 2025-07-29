@@ -3,3 +3,4 @@
 build/**
 h2gis/lib/**
 dist/**
+h2gis.egg-info

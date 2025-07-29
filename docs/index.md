@@ -106,17 +106,45 @@ Connect to a local H2GIS database file.
 
 Execute an `INSERT`, `UPDATE`, or `DELETE` SQL statement.
 
-### `fetch(sql: str) -> list[str]`
+### `commit() -> int`
 
-Execute a `SELECT` SQL query and return results as a list of strings (one per row).
+Commit the current transaction by executing `COMMIT;`.
+
+### `rollback() -> int`
+
+Rollback the current transaction by executing `ROLLBACK;`.
+
+### `fetch(query: str, row_index: int = 1, stringformat="utf-8") -> dict[str, list]`
+
+Execute a `SELECT` SQL query and return all result rows as a typed dictionary. Each key is a column name, and each value is a list of column values.
+
+### `parse_string_buffer(buf: bytes, num_rows: int) -> list[str | None]`
+
+Parse a buffer of length-prefixed UTF-8 strings or null entries.
+
+### `parse_geometry_buffer(buf: bytes, num_rows: int) -> List[Optional[BaseGeometry]]`
+
+Parse a buffer of WKB geometry entries and return a list of Shapely geometry objects or `None`.
+
+### `deserialize_resultset_buffer(buf: bytes) -> dict[str, list]`
+
+Deserialize the binary buffer returned by the native `fetch_all` function into a dictionary of columns with typed values.
+
+### `isConnected() -> bool`
+
+Return `True` if a database connection is currently active and responsive.
+
+### `ping() -> bool`
+
+Check if the database connection is alive by executing a test query.
 
 ### `close()`
 
-Close the active database connection.
+Close the current database connection but leave the isolate active.
 
-### `__del__()`
+### `deleteAndClose()`
 
-Destructor that automatically tears down the GraalVM isolate and closes any connection.
+Delete the database file (if applicable) and close the connection.
 
 
 # Usage Examples
@@ -124,34 +152,29 @@ Destructor that automatically tears down the GraalVM isolate and closes any conn
 ## Basic Example
 
 ```python
+
 from h2gis import H2GIS
 import geopandas as gpd
 import pandas as pd
 from shapely.wkt import loads as wkt_loads
 import json
-import matplotlib.pyplot as plt # Import matplotlib
+import matplotlib.pyplot as plt  # Import matplotlib
 import ast
 
 # Connexion and data import
-h2gis = H2GIS("/home/mael/test", "sa", "sa")
-h2gis.execute("DROP TABLE IF EXISTS LIEUX;")
+h2gis = H2GIS("/mydb/path/dbName", "sa", "sa")
 h2gis.execute("""
-CREATE TABLE LIEUX (
-    ID INT PRIMARY KEY AUTO_INCREMENT,
-NOM VARCHAR(255),
-DESCRIPTION VARCHAR(255),
-THE_GEOM GEOMETRY(GEOMETRY)
-);""")
-
-h2gis.execute("INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Paris', 'Capitale de la France', ST_GeomFromText('POINT(2.3522 48.8566)', 4326));")
-h2gis.execute("INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Lyon', 'Ville gastronomique', ST_GeomFromText('POINT(4.8357 45.7640)', 4326));")
-h2gis.execute("INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Marseille', 'Port méditerranéen', ST_GeomFromText('POINT(5.3698 43.2965)', 4326));")
-h2gis.execute("""
-INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM)
-VALUES (
-    'Englobant',
-    'Géométrie englobante',
-    ST_GeomFromText('POLYGON((
+        DROP TABLE IF EXISTS LIEUX;
+        CREATE TABLE LIEUX (
+            ID INT PRIMARY KEY AUTO_INCREMENT,
+            NOM VARCHAR(255),
+            DESCRIPTION VARCHAR(255),
+            THE_GEOM GEOMETRY(GEOMETRY)
+        );
+        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Paris', 'Capitale de la France', ST_GeomFromText('POINT(2.3522 48.8566)', 4326));
+        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Lyon', 'Ville gastronomique', ST_GeomFromText('POINT(4.8357 45.7640)', 4326));
+        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Marseille', 'Port méditerranéen', ST_GeomFromText('POINT(5.3698 43.2965)', 4326));
+        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Englobant', 'Géométrie englobante', ST_GeomFromText('POLYGON((
         -4.72 48.42,
         -1.35 47.23,
         0.88 47.90,
@@ -179,27 +202,19 @@ VALUES (
 );
 """)
 
-
 # Fetch
-fetch = h2gis.fetch("SELECT * FROM LIEUX;")
+fetch = h2gis.fetch("SELECT NOM, DESCRIPTION, THE_GEOM as geometry FROM LIEUX;")
 print(fetch)
 
-
 # Convert as dataframe
-df = pd.DataFrame(fetch)
-
-# Convert the geometry column in geometry type
-df['geometry'] = df['THE_GEOM'].apply(wkt_loads)
-df.drop(columns=['THE_GEOM'], inplace=True)
-
-gdf = gpd.GeoDataFrame(df, geometry="geometry", crs="EPSG:4326")
+gdf = gpd.GeoDataFrame(fetch, geometry="GEOMETRY", crs="EPSG:4326")
 print(gdf)
 
-#Gest distance between first two points
+# Gest distance between first two points
 if len(gdf) >= 2:
     paris_geom = gdf[gdf['NOM'] == 'Paris'].geometry.iloc[0]
     lyon_geom = gdf[gdf['NOM'] == 'Lyon'].geometry.iloc[0]
-    dist_paris_lyon = paris_geom.distance(lyon_geom) * 111319.9 # Approximation degrés à mètres (pour 4326)
+    dist_paris_lyon = paris_geom.distance(lyon_geom) * 111319.9
 
     print(f"Distance in meters between poit 1 and 2: {dist_paris_lyon:.2f} m")
 else:
@@ -208,7 +223,7 @@ else:
 print("connected : ", h2gis.isConnected())
 h2gis.close()
 
-# Affichage du plot
+# Display data
 gdf.plot(edgecolor='black', figsize=(10, 8))
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")

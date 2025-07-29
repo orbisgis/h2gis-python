@@ -1,3 +1,28 @@
+"""
+* H2GIS-python is a Python wrapper to use H2GIS.
+* <a href="http://www.h2database.com">http://www.h2database.com</a>. H2GIS-python is developed by CNRS
+* <a href="http://www.cnrs.fr/">http://www.cnrs.fr/</a>.
+*
+* This code is part of the H2GIS-python project. H2GIS-python is free software;
+* you can redistribute it and/or modify it under the terms of the GNU
+* Lesser General Public License as published by the Free Software Foundation;
+* version 3.0 of the License.
+*
+* H2GIS-python is distributed in the hope that it will be useful, but
+* WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+* FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License
+* for more details <http://www.gnu.org/licenses/>.
+*
+*
+* For more information, please consult: <a href="http://www.h2gis.org/">http://www.h2gis.org/</a>
+* or contact directly: info_at_h2gis.org
+
+@author Maël PHILIPPE, CNRS
+@author Erwan BOCHER, CNRS
+"""
+
+import os
+import sys
 from h2gis import H2GIS
 import geopandas as gpd
 import pandas as pd
@@ -6,30 +31,24 @@ import json
 import matplotlib.pyplot as plt
 import time
 
-# Connection and data import
-h2gis = H2GIS("/home/mael/test", "sa", "sa")
+# Connexion et import des données
+h2gis = H2GIS("/mydb/path/dbName", "sa", "sa")
 
-# Clean tables
+# clean table if exist
 h2gis.execute("DROP TABLE IF EXISTS TEST;")
 
+#import data
+h2gis.execute("CALL GeoJsonRead('/path/to/test.geojson');")
 
-h2gis.execute("CALL GeoJsonRead('./test.geojson');")
+# Fetch data from select
+fetch = h2gis.fetch("SELECT THE_GEOM FROM TEST;")
+gdf = gpd.GeoDataFrame(fetch, geometry="THE_GEOM", crs="EPSG:2154")
 
-fetch = h2gis.fetch("SELECT * FROM TEST;")
-
-# Convert in dataframe
-df = pd.DataFrame(fetch)
-df["geometry"] = df["THE_GEOM"].apply(wkt_loads)
-
-# Create a gopandas dataframe
-gdf = gpd.GeoDataFrame(df, geometry="geometry", crs="EPSG:2154")
-print(gdf)
-
-# Plot the geoms of the dataframe
+# Display GeoDataFrame
 gdf.plot()
 
-
-# Close h2gis connection
+# Close connection
 h2gis.close()
 
 plt.show()
+
