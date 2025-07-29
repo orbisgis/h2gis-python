@@ -162,7 +162,7 @@ import matplotlib.pyplot as plt  # Import matplotlib
 import ast
 
 # Connexion and data import
-h2gis = H2GIS("/mydb/path/dbName", "sa", "sa")
+h2gis = H2GIS("/mydb/path/dbName")
 h2gis.execute("""
         DROP TABLE IF EXISTS LIEUX;
         CREATE TABLE LIEUX (
