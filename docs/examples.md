@@ -61,17 +61,8 @@ VALUES (
 
 # Fetch
 fetch = h2gis.fetch("SELECT * FROM LIEUX;")
-print(fetch)
 
-
-# Convert as dataframe
-df = pd.DataFrame(fetch)
-
-# Convert the geometry column in geometry type
-df['geometry'] = df['THE_GEOM'].apply(wkt_loads)
-df.drop(columns=['THE_GEOM'], inplace=True)
-
-gdf = gpd.GeoDataFrame(df, geometry="geometry", crs="EPSG:4326")
+gdf = gpd.GeoDataFrame(fetch, geometry="geometry", crs="EPSG:4326")
 print(gdf)
 
 #Gest distance between first two points
@@ -87,7 +78,7 @@ else:
 print("connected : ", h2gis.isConnected())
 h2gis.close()
 
-# Affichage du plot
+# Display the fetched data
 gdf.plot(edgecolor='black', figsize=(10, 8))
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")
