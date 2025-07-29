@@ -17,8 +17,8 @@
 * For more information, please consult: <a href="http://www.h2gis.org/">http://www.h2gis.org/</a>
 * or contact directly: info_at_h2gis.org
 
-@author Maël PHILIPPE
-@author Erwan BOCHER
+@author Maël PHILIPPE, CNRS
+@author Erwan BOCHER, CNRS
 """
 
 import ctypes

@@ -17,8 +17,8 @@
 * For more information, please consult: <a href="http://www.h2gis.org/">http://www.h2gis.org/</a>
 * or contact directly: info_at_h2gis.org
 
-@author Maël PHILIPPE
-@author Erwan BOCHER
+@author Maël PHILIPPE, CNRS
+@author Erwan BOCHER, CNRS
 """
 
 import os
@@ -28,23 +28,27 @@ import geopandas as gpd
 import pandas as pd
 from shapely.wkt import loads as wkt_loads
 import json
-
+import matplotlib.pyplot as plt
 import time
 
 # Connexion et import des données
-h2gis = H2GIS("/home/mael/test", "sa", "sa")
+h2gis = H2GIS("/mydb/path/dbName", "sa", "sa")
 
-# Nettoyage des tables si elles existent
+# clean table if exist
 h2gis.execute("DROP TABLE IF EXISTS TEST;")
 
-h2gis.execute("CALL GeoJsonRead('./test.geojson');")
+#import data
+h2gis.execute("CALL GeoJsonRead('/path/to/test.geojson');")
 
+# Fetch data from select
 fetch = h2gis.fetch("SELECT THE_GEOM FROM TEST;")
-
 gdf = gpd.GeoDataFrame(fetch, geometry="THE_GEOM", crs="EPSG:2154")
 
-# Print dataframe
+# Display GeoDataFrame
 gdf.plot()
 
-# Close the connetion
+# Close connection
 h2gis.close()
+
+plt.show()
+
