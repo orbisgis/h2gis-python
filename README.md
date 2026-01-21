@@ -16,7 +16,7 @@ If you want information about h2gis you can go to the [h2gis website](http://www
 
 - Python 3.7+
 - Native H2GIS shared library compiled with GraalVM
-- Supported platforms: Linux, Windows, macOS
+- Supported platforms: Linux, Windows
 
 ## Install the Python Package
 
