@@ -66,4 +66,4 @@ skipped when none is found. Building the wheels and releasing: see
 
 ## License
 
-LGPL 3.0. H2GIS-python is developed by the [CNRS](http://www.cnrs.fr/).
+LGPL 3.0. H2GIS-python is developed by the GEODATICS team, [Lab-STICC](https://labsticc.fr/) - [CNRS](http://www.cnrs.fr/).
