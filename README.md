@@ -1,10 +1,10 @@
 # H2GIS Python
 
 A [DB-API 2.0](https://peps.python.org/pep-0249/) driver for the
-[H2GIS](http://www.h2gis.org/) spatial database, with an API modelled on
+[H2GIS](http://www.h2gis.org/) spatial database, with an API aligned on
 [psycopg 3](https://www.psycopg.org/psycopg3/docs/). H2GIS runs embedded in
-your Python process through a native library compiled with GraalVM: no Java,
-no server.
+your Python process through a native library compiled with GraalVM (no JVM,
+no server).
 
 ```python
 import h2gis
