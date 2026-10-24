@@ -11,34 +11,23 @@ import h2gis
 from h2gis.rows import dict_row
 
 with h2gis.connect("/data/my_db", row_factory=dict_row) as conn:
-    conn.execute("CREATE TABLE IF NOT EXISTS LIEUX(ID INT PRIMARY KEY, NOM VARCHAR, "
+    conn.execute("CREATE TABLE IF NOT EXISTS PLACE_NAMES(ID SERIAL, NOM VARCHAR, "
                  "THE_GEOM GEOMETRY(POINT, 4326))")
-    conn.execute("INSERT INTO LIEUX VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+    conn.execute("INSERT INTO PLACE_NAMES VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
                  [1, "Nantes", -1.55, 47.22])
-    for row in conn.execute("SELECT * FROM LIEUX WHERE NOM = %s", ["Nantes"]):
+    for row in conn.execute("SELECT * FROM PLACE_NAMES WHERE NOM = %s", ["Nantes"]):
         print(row["ID"], row["THE_GEOM"])          # a Shapely geometry
 
     # GeoPandas, CRS taken from the SRID
-    gdf = h2gis.read_gdf(conn, "SELECT * FROM LIEUX")
-    h2gis.to_h2gis(gdf, "LIEUX_COPIE", conn, if_exists="replace")
+    gdf = h2gis.read_gdf(conn, "SELECT * FROM PLACE_NAMES")
+    h2gis.to_h2gis(gdf, "PLACE_NAMES_COPY", conn, if_exists="replace")
 
     with conn.transaction():                         # nested blocks = savepoints
-        conn.execute("DELETE FROM LIEUX WHERE ID = %s", [1])
+        conn.execute("DELETE FROM PLACE_NAMES WHERE ID = %s", [1])
         raise h2gis.Rollback                          # undo this block only
 # committed on success, rolled back on error, then closed
 ```
 
-* **psycopg 3 idioms**: `conn.execute()`, context managers, `autocommit`,
-  nested `transaction()` blocks, row factories, `cursor.stream()`, `h2gis.sql`
-  for dynamic identifiers.
-* **Parameters** `%s` / `%(name)s`, bound natively with prepared statements:
-  no string concatenation, no SQL injection. `executemany()` sends batches.
-* **Spatial types**: geometries are Shapely objects in both directions, with
-  their SRID.
-* **Typed errors** from the H2 error code: `h2gis.errors.UndefinedTable`,
-  `UniqueViolation`...
-* **pandas / GeoPandas**: `read_gdf`, `read_df`, `to_h2gis`, chunked reading
-  of big tables.
 
 ## Documentation
 

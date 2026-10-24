@@ -1,0 +1,4 @@
+# Native libraries (native/): binary, never converted (line endings) nor diffed
+*.so binary
+*.dll binary
+*.dylib binary
