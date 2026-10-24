@@ -1,4 +1,9 @@
-# MANIFEST.in
-include README.md
-recursive-include h2gis/lib *.so *.dll *.dylib
+# Source distribution: Python sources, docs and tests. The native libraries
+# are only shipped in the platform wheels (see tools/build_wheel.py).
+include README.md CHANGELOG.md license-file.md
 recursive-include docs *.md
+recursive-include test *.py
+prune h2gis/lib
+prune example
+prune native
+prune tools

@@ -17,82 +17,65 @@
 * For more information, please consult: <a href="http://www.h2gis.org/">http://www.h2gis.org/</a>
 * or contact directly: info_at_h2gis.org
 
-@author Maël PHILIPPE, CNRS
 @author Erwan BOCHER, CNRS
 """
 
-from h2gis import H2GIS
-import geopandas as gpd
-import pandas as pd
-from shapely.wkt import loads as wkt_loads
-import json
-import matplotlib.pyplot as plt  # Import matplotlib
-import ast
+# Create a table, insert places with parameters, query them and plot them
+# with GeoPandas. Geometries are given as EWKT strings (SRID=4326;...).
+#
+#     python example.py /path/to/my_db
 
-# Connexion and data import
-h2gis = H2GIS("/mydb/path/dbName", "sa", "sa")
-h2gis.execute("""
-        DROP TABLE IF EXISTS LIEUX;
-        CREATE TABLE LIEUX (
-            ID INT PRIMARY KEY AUTO_INCREMENT,
-            NOM VARCHAR(255),
-            DESCRIPTION VARCHAR(255),
-            THE_GEOM GEOMETRY(GEOMETRY)
-        );
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Paris', 'Capitale de la France', ST_GeomFromText('POINT(2.3522 48.8566)', 4326));
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Lyon', 'Ville gastronomique', ST_GeomFromText('POINT(4.8357 45.7640)', 4326));
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Marseille', 'Port méditerranéen', ST_GeomFromText('POINT(5.3698 43.2965)', 4326));
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Englobant', 'Géométrie englobante', ST_GeomFromText('POLYGON((
-        -4.72 48.42,
-        -1.35 47.23,
-        0.88 47.90,
-        2.35 48.86,
-        4.08 49.33,
-        5.70 49.00,
-        6.65 48.16,
-        7.75 48.58,
-        7.27 47.50,
-        6.75 46.15,
-        6.00 45.45,
-        4.90 44.50,
-        4.20 43.80,
-        5.3698 43.2965,
-        3.50 43.00,
-        2.50 42.50,
-        0.50 42.80,
-        -1.00 43.40,
-        -1.80 44.50,
-        -2.50 45.80,
-        -2.90 46.80,
-        -3.50 47.80,
-        -4.72 48.42
-    ))', 4326)
-);
-""")
+import sys
 
-# Fetch
-fetch = h2gis.fetch("SELECT NOM, DESCRIPTION, THE_GEOM as geometry FROM LIEUX;")
-print(fetch)
+import matplotlib.pyplot as plt
 
-# Convert as dataframe
-gdf = gpd.GeoDataFrame(fetch, geometry="GEOMETRY", crs="EPSG:4326")
-print(gdf)
+import h2gis
+from h2gis.rows import dict_row
 
-# Gest distance between first two points
-if len(gdf) >= 2:
-    paris_geom = gdf[gdf['NOM'] == 'Paris'].geometry.iloc[0]
-    lyon_geom = gdf[gdf['NOM'] == 'Lyon'].geometry.iloc[0]
-    dist_paris_lyon = paris_geom.distance(lyon_geom) * 111319.9
+db_path = sys.argv[1] if len(sys.argv) > 1 else "./example_db"
 
-    print(f"Distance in meters between poit 1 and 2: {dist_paris_lyon:.2f} m")
-else:
-    print("2 geometries needed to calculate a distance")
+with h2gis.connect(db_path, row_factory=dict_row) as conn:
+    conn.execute("DROP TABLE IF EXISTS PLACE_NAMES")
+    conn.execute("""
+                 CREATE TABLE PLACE_NAMES (
+                                              ID SERIAL,
+                                              NOM VARCHAR(255),
+                                              DESCRIPTION VARCHAR(255),
+                                              THE_GEOM GEOMETRY(GEOMETRY, 4326)
+                 )""")
 
-print("connected : ", h2gis.isConnected())
-h2gis.close()
+    places = [
+        ("Paris", "Capitale de la France", "SRID=4326;POINT (2.3522 48.8566)"),
+        ("Lyon", "Ville lumiere", "SRID=4326;POINT (4.8357 45.7640)"),
+        ("Marseille", "Port méditerranéen", "SRID=4326;POINT (5.3698 43.2965)")
+    ]
+    # Parameters are bound by the driver: no string concatenation, no SQL injection.
+    # H2 converts the EWKT strings to geometries, with their SRID.
+    conn.cursor().executemany(
+        "INSERT INTO PLACE_NAMES (NOM, DESCRIPTION, THE_GEOM) VALUES (%s, %s, %s)", places)
 
-# Display data
-gdf.plot(edgecolor='black', figsize=(10, 8))
+    # Rows as dicts, geometries come back as Shapely objects
+    for row in conn.execute("SELECT NOM, ST_GeometryType(THE_GEOM) AS TYPE FROM PLACE_NAMES ORDER BY ID"):
+        print(row["NOM"], row["TYPE"])
+
+    # Distance computed by H2GIS, in Lambert 93 (EPSG:2154)
+    paris_lyon = conn.execute("""
+                              SELECT ST_Distance(ST_Transform(A.THE_GEOM, 2154), ST_Transform(B.THE_GEOM, 2154)) AS D
+                              FROM PLACE_NAMES A, PLACE_NAMES B WHERE A.NOM = %s AND B.NOM = %s""", ["Paris", "Lyon"]).fetchone()
+    print(f"Distance Paris - Lyon: {paris_lyon['D'] / 1000:.1f} km")
+
+    # Straight to GeoPandas: the CRS comes from the SRID of the geometries
+    gdf = h2gis.read_gdf(conn, "SELECT NOM, DESCRIPTION, THE_GEOM FROM PLACE_NAMES")
+    print(gdf)
+    print("CRS:", gdf.crs)
+# committed and closed here
+
+# The polygon in grey, the places as red points labelled with their name
+points = gdf[gdf.geom_type == "Point"]
+ax = gdf[gdf.geom_type != "Point"].plot(color="lightgrey", edgecolor="black", figsize=(10, 8))
+points.plot(ax=ax, color="red", markersize=40)
+for nom, geom in zip(points["NOM"], points.geometry):
+    ax.annotate(nom, (geom.x, geom.y), xytext=(6, 6), textcoords="offset points", fontsize=11)
 plt.xlabel("Longitude")
 plt.ylabel("Latitude")
 plt.show()

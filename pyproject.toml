@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "h2gis"
+dynamic = ["version"]
+description = "DB-API 2.0 driver for the H2GIS spatial database, with a psycopg 3 style API, through a native GraalVM library."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "LGPL-3.0-only"
+license-files = ["license-file.md"]
+authors = [
+    { name = "Maël PHILIPPE, CNRS" },
+    { name = "Erwan BOCHER, CNRS" },
+]
+keywords = ["h2gis", "h2", "gis", "spatial", "database", "dbapi", "geopandas"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+]
+dependencies = ["shapely>=2.0", "numpy"]
+
+[project.optional-dependencies]
+geopandas = ["pandas>=1.5", "geopandas>=0.14"]
+test = ["pytest", "pandas>=1.5", "geopandas>=0.14"]
+
+[project.urls]
+Homepage = "https://github.com/orbisgis/h2gis-python"
+Documentation = "https://github.com/orbisgis/h2gis-python/blob/main/docs/DBAPI.md"
+Changelog = "https://github.com/orbisgis/h2gis-python/blob/main/CHANGELOG.md"
+H2GIS = "http://www.h2gis.org/"
+
+[tool.setuptools]
+packages = ["h2gis"]
+
+[tool.setuptools.package-data]
+# The native library of the target platform, copied by tools/build_wheel.py
+h2gis = ["lib/*.so", "lib/*.dll", "lib/*.dylib"]
+
+[tool.setuptools.dynamic]
+version = { attr = "h2gis.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["test"]

@@ -1,240 +1,80 @@
 # H2GIS Python
 
-This is a python package that allows to manipulate H2GIS spatial database using a GraalVM-compiled native library and a C interface.
+A [DB-API 2.0](https://peps.python.org/pep-0249/) driver for the
+[H2GIS](http://www.h2gis.org/) spatial database, with an API modelled on
+[psycopg 3](https://www.psycopg.org/psycopg3/docs/). H2GIS runs embedded in
+your Python process through a native library compiled with GraalVM: no Java,
+no server.
 
-## Main points
+```python
+import h2gis
+from h2gis.rows import dict_row
 
-- [Installation](#Installation): Installation and setup instructions.
-- [H2GIS class](#H2GIS-Class): Detailed documentation for the `H2GIS` class.
-- [Example](#Usage-Examples): Example usage of the library.
+with h2gis.connect("/data/my_db", row_factory=dict_row) as conn:
+    conn.execute("CREATE TABLE IF NOT EXISTS LIEUX(ID INT PRIMARY KEY, NOM VARCHAR, "
+                 "THE_GEOM GEOMETRY(POINT, 4326))")
+    conn.execute("INSERT INTO LIEUX VALUES (%s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                 [1, "Nantes", -1.55, 47.22])
+    for row in conn.execute("SELECT * FROM LIEUX WHERE NOM = %s", ["Nantes"]):
+        print(row["ID"], row["THE_GEOM"])          # a Shapely geometry
 
-If you want information about h2gis you can go to the [h2gis website](http://www.h2gis.org/).
+    # GeoPandas, CRS taken from the SRID
+    gdf = h2gis.read_gdf(conn, "SELECT * FROM LIEUX")
+    h2gis.to_h2gis(gdf, "LIEUX_COPIE", conn, if_exists="replace")
 
-# Installation
+    with conn.transaction():                         # nested blocks = savepoints
+        conn.execute("DELETE FROM LIEUX WHERE ID = %s", [1])
+        raise h2gis.Rollback                          # undo this block only
+# committed on success, rolled back on error, then closed
+```
 
-## Requirements
+* **psycopg 3 idioms**: `conn.execute()`, context managers, `autocommit`,
+  nested `transaction()` blocks, row factories, `cursor.stream()`, `h2gis.sql`
+  for dynamic identifiers.
+* **Parameters** `%s` / `%(name)s`, bound natively with prepared statements:
+  no string concatenation, no SQL injection. `executemany()` sends batches.
+* **Spatial types**: geometries are Shapely objects in both directions, with
+  their SRID.
+* **Typed errors** from the H2 error code: `h2gis.errors.UndefinedTable`,
+  `UniqueViolation`...
+* **pandas / GeoPandas**: `read_gdf`, `read_df`, `to_h2gis`, chunked reading
+  of big tables.
 
-- Python 3.7+
-- Native H2GIS shared library compiled with GraalVM
-- Supported platforms: Linux, Windows
+## Documentation
 
-## Install the Python Package
+* [Installation](docs/installation.md)
+* [User guide](docs/DBAPI.md): connections, transactions, parameters, errors,
+  pandas/GeoPandas, threads, limitations
+* [Examples](docs/examples.md) and the [example](example/) folder
+* [Native interface](docs/NATIVE_API.md): status of the GraalVM library and
+  requested changes
+* [Changelog](CHANGELOG.md), including the migration from 0.0.x
+
+## Installation
 
 ```bash
-pip install .
+pip install h2gis               # driver + Shapely
+pip install "h2gis[geopandas]"  # + pandas and GeoPandas
 ```
 
-Ensure the native library file is present in the following structure:
+Requirements: Python 3.9+ on Linux x86-64 (glibc 2.34+), Windows x86-64 or
+macOS on Apple silicon. Each platform wheel ships the native H2GIS library
+(C API 2, H2GIS 2.2.6+); set `H2GIS_LIB_PATH` or pass `lib_path=` to
+`connect()` to use another one.
 
-```
-h2gis/
-├── lib/
-│   ├── h2gis.so      # Linux
-│   ├── h2gis.dylib   # macOS
-│   └── h2gis.dll     # Windows
-```
+## Tests
 
-
-
-## Custom Library Path
-
-You can specify a custom path to the native library:
-
-```python
-from h2gis import H2GIS
-
-db = H2GIS(lib_path="/custom/path/to/h2gis.so")
-
-
-# H2GIS Class
-
-## Overview
-
-`H2GIS` is a Python class that wraps a native shared library compiled with GraalVM. It provides access to an embedded H2GIS database using GraalVM isolate and thread objects.
-
-## Constructor
-
-```python
-H2GIS(lib_path=None)
+```bash
+pip install -e ".[test]"
+pytest test/
 ```
 
-- `lib_path`: Optional path to the `.so`, `.dll`, or `.dylib` file. If not provided, a default path is used based on the current OS.
+From a clone, h2gis uses the native library of [native/](native/README.md).
+`test/test_unit.py` needs no native library; `test/test_integration.py` runs
+against the libraries listed in `H2GIS_TEST_LIBS`, or the default one, and is
+skipped when none is found. Building the wheels and releasing: see
+[DEPLOY.md](DEPLOY.md).
 
-## Methods
+## License
 
-### `connect(db_file: str, username="sa", password="")`
-
-Connect to a local H2GIS database file.
-
-### `execute(sql: str) -> int`
-
-Execute an `INSERT`, `UPDATE`, or `DELETE` SQL statement.
-
-### `fetch(sql: str) -> list[str]`
-
-Execute a `SELECT` SQL query and return results as a list of strings (one per row).
-
-### `close()`
-
-Close the active database connection.
-
-### `__del__()`
-
-Destructor that automatically tears down the GraalVM isolate and closes any connection.
-
-# H2GIS Class
-
-## Overview
-
-`H2GIS` is a Python class that wraps a native shared library compiled with GraalVM. It provides access to an embedded H2GIS database using GraalVM isolate and thread objects.
-
-## Constructor
-
-```python
-H2GIS(lib_path=None)
-```
-
-- `lib_path`: Optional path to the `.so`, `.dll`, or `.dylib` file. If not provided, a default path is used based on the current OS.
-
-## Methods
-
-### `connect(db_file: str, username="sa", password="")`
-
-Connect to a local H2GIS database file.
-
-### `execute(sql: str) -> int`
-
-Execute an `INSERT`, `UPDATE`, or `DELETE` SQL statement.
-
-### `commit() -> int`
-
-Commit the current transaction by executing `COMMIT;`.
-
-### `rollback() -> int`
-
-Rollback the current transaction by executing `ROLLBACK;`.
-
-### `fetch(query: str, row_index: int = 1, stringformat="utf-8") -> dict[str, list]`
-
-Execute a `SELECT` SQL query and return all result rows as a typed dictionary. Each key is a column name, and each value is a list of column values.
-
-### `parse_string_buffer(buf: bytes, num_rows: int) -> list[str | None]`
-
-Parse a buffer of length-prefixed UTF-8 strings or null entries.
-
-### `parse_geometry_buffer(buf: bytes, num_rows: int) -> List[Optional[BaseGeometry]]`
-
-Parse a buffer of WKB geometry entries and return a list of Shapely geometry objects or `None`.
-
-### `deserialize_resultset_buffer(buf: bytes) -> dict[str, list]`
-
-Deserialize the binary buffer returned by the native `fetch_all` function into a dictionary of columns with typed values.
-
-### `isConnected() -> bool`
-
-Return `True` if a database connection is currently active and responsive.
-
-### `ping() -> bool`
-
-Check if the database connection is alive by executing a test query.
-
-### `close()`
-
-Close the current database connection but leave the isolate active.
-
-### `deleteAndClose()`
-
-Delete the database file (if applicable) and close the connection.
-
-
-# Usage Examples
-
-## Basic Example
-
-```python
-
-from h2gis import H2GIS
-import geopandas as gpd
-import pandas as pd
-from shapely.wkt import loads as wkt_loads
-import json
-import matplotlib.pyplot as plt  # Import matplotlib
-import ast
-
-# Connexion and data import
-h2gis = H2GIS("/mydb/path/dbName")
-h2gis.execute("""
-        DROP TABLE IF EXISTS LIEUX;
-        CREATE TABLE LIEUX (
-            ID INT PRIMARY KEY AUTO_INCREMENT,
-            NOM VARCHAR(255),
-            DESCRIPTION VARCHAR(255),
-            THE_GEOM GEOMETRY(GEOMETRY)
-        );
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Paris', 'Capitale de la France', ST_GeomFromText('POINT(2.3522 48.8566)', 4326));
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Lyon', 'Ville gastronomique', ST_GeomFromText('POINT(4.8357 45.7640)', 4326));
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Marseille', 'Port méditerranéen', ST_GeomFromText('POINT(5.3698 43.2965)', 4326));
-        INSERT INTO LIEUX (NOM, DESCRIPTION, THE_GEOM) VALUES ('Englobant', 'Géométrie englobante', ST_GeomFromText('POLYGON((
-        -4.72 48.42,
-        -1.35 47.23,
-        0.88 47.90,
-        2.35 48.86,
-        4.08 49.33,
-        5.70 49.00,
-        6.65 48.16,
-        7.75 48.58,
-        7.27 47.50,
-        6.75 46.15,
-        6.00 45.45,
-        4.90 44.50,
-        4.20 43.80,
-        5.3698 43.2965,
-        3.50 43.00,
-        2.50 42.50,
-        0.50 42.80,
-        -1.00 43.40,
-        -1.80 44.50,
-        -2.50 45.80,
-        -2.90 46.80,
-        -3.50 47.80,
-        -4.72 48.42
-    ))', 4326)
-);
-""")
-
-# Fetch the select query
-fetch = h2gis.fetch("SELECT NOM, DESCRIPTION, THE_GEOM as geometry FROM LIEUX;")
-print(fetch)
-
-# Convert as dataframe
-gdf = gpd.GeoDataFrame(fetch, geometry="GEOMETRY", crs="EPSG:4326")
-print(gdf)
-
-# Gest distance between first two points
-if len(gdf) >= 2:
-    paris_geom = gdf[gdf['NOM'] == 'Paris'].geometry.iloc[0]
-    lyon_geom = gdf[gdf['NOM'] == 'Lyon'].geometry.iloc[0]
-    dist_paris_lyon = paris_geom.distance(lyon_geom) * 111319.9
-
-    print(f"Distance in meters between poit 1 and 2: {dist_paris_lyon:.2f} m")
-else:
-    print("2 geometries needed to calculate a distance")
-
-print("connected : ", h2gis.isConnected())
-h2gis.close()
-
-# Display data
-gdf.plot(edgecolor='black', figsize=(10, 8))
-plt.xlabel("Longitude")
-plt.ylabel("Latitude")
-plt.show()
-```
-
-## Custom Native Library Path
-
-```python
-db = H2GIS(lib_path="/custom/path/h2gis.so")
-```
-
-## Notes
-- By default, the native `.so`, `.dll` are already included in the package, in the `lib` folder.
+LGPL 3.0. H2GIS-python is developed by the [CNRS](http://www.cnrs.fr/).
