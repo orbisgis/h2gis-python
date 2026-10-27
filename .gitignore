@@ -4,3 +4,6 @@ build/**
 h2gis/lib/**
 dist/**
 h2gis.egg-info
+__pycache__/
+*.pyc
+.pytest_cache/
