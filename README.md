@@ -64,6 +64,50 @@ against the libraries listed in `H2GIS_TEST_LIBS`, or the default one, and is
 skipped when none is found. Building the wheels and releasing: see
 [DEPLOY.md](DEPLOY.md).
 
+## Demo script
+
+```python
+import sys
+import time
+
+import matplotlib.pyplot as plt
+
+import h2gis
+
+DATA = "../uhi_lcz/Angers"
+db_path = sys.argv[1] if len(sys.argv) > 1 else "/tmp/gisdb"
+data_dir = sys.argv[2] if len(sys.argv) > 2 else DATA
+
+# Open (or create) the database; committed and closed at the end of the block
+with h2gis.connect(db_path) as conn:
+    # Import the GeoJSON files (true: replace the tables if they exist)
+    conn.execute("CALL GeoJsonRead(%s, 'BUILDING', true)", [f"{data_dir}/building.geojson"])
+    conn.execute("CALL GeoJsonRead(%s, 'ROAD', true)", [f"{data_dir}/road.geojson"])
+    print("Data loaded")
+
+    start_time = time.time()
+
+    # Tables straight to GeoDataFrames (GeoClimate data is in Lambert 93)
+    gdf_building = h2gis.read_gdf(conn, "SELECT THE_GEOM, HEIGHT_WALL FROM BUILDING",
+                                  crs="EPSG:2154")
+    gdf_road = h2gis.read_gdf(conn, "SELECT THE_GEOM FROM ROAD WHERE WIDTH >= %s", [10],
+                              crs="EPSG:2154")
+    print("Dataframes created")
+
+# Plot
+bins = [0, 5, 10, 20, 50, 100, 200]
+fig, ax = plt.subplots(1, 1)
+gdf_building.plot(column="HEIGHT_WALL", legend=True, ax=ax, scheme="UserDefined",
+                  classification_kwds={"bins": bins})
+gdf_road.plot(ax=ax, color="black")
+ax.set_title("Building height (m) from GeoClimate")
+
+elapsed_time = time.time() - start_time
+print(f"Time : {elapsed_time:.2f} seconds")
+
+plt.show()
+```
+
 ## License
 
 LGPL 3.0. H2GIS-python is developed by the GEODATICS team, [Lab-STICC](https://labsticc.fr/) - [CNRS](http://www.cnrs.fr/).
