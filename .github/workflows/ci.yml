@@ -203,6 +203,9 @@ jobs:
           name: sdist
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A publication run again: the files already on PyPI are skipped
+          skip-existing: true
 
   publish-conda:
     name: Publish on anaconda.org
@@ -233,8 +236,15 @@ jobs:
             echo "::notice::No ANACONDA_API_KEY secret: the conda packages are only attached to the GitHub release"
             exit 0
           fi
-          ls conda/*.conda
-          rattler-build upload anaconda --owner "$ANACONDA_OWNER" conda/*.conda
+          # The artifacts keep the folder of the packages (noarch/)
+          mapfile -t packages < <(find conda -name '*.conda' | sort)
+          if [ ${#packages[@]} -eq 0 ]; then
+            echo "No conda package in the artifacts"; exit 1
+          fi
+          printf '%s\n' "${packages[@]}"
+          # A package already on anaconda.org is refused: change __version__
+          # (or the build number of the recipe) to publish again
+          rattler-build upload anaconda --owner "$ANACONDA_OWNER" "${packages[@]}"
 
   release:
     name: GitHub release
@@ -254,8 +264,16 @@ jobs:
           merge-multiple: true
       - name: Create the release
         run: |
+          # The conda packages come in a folder (noarch/): all files flat
+          find dist -mindepth 2 -type f -exec mv -t dist {} +
+          find dist -mindepth 1 -type d -empty -delete
           ls -l dist
           cd dist
           sha256sum * > SHA256SUMS
-          # --target: on a manual run, the tag is created on the commit built
-          gh release create "$TAG" * --target "$GITHUB_SHA" --title "h2gis $TAG" --generate-notes
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # A publication run again: the files of the release are replaced
+            gh release upload "$TAG" * --clobber
+          else
+            # --target: on a manual run, the tag is created on the commit built
+            gh release create "$TAG" * --target "$GITHUB_SHA" --title "h2gis $TAG" --generate-notes
+          fi
