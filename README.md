@@ -44,6 +44,7 @@ with h2gis.connect("/data/my_db", row_factory=dict_row) as conn:
 ```bash
 pip install h2gis               # driver + Shapely
 pip install "h2gis[geopandas]"  # + pandas and GeoPandas
+conda install -c orbisgis -c conda-forge h2gis   # with conda
 ```
 
 Requirements: Python 3.9+ on Linux x86-64 (glibc 2.34+), Windows x86-64 or
@@ -58,7 +59,9 @@ pip install -e ".[test]"
 pytest test/
 ```
 
-From a clone, h2gis uses the native library of [native/](native/README.md).
+From a clone, h2gis uses the native library of [native/](native/README.md),
+downloaded once from a release of H2GIS:
+`python tools/update_native.py --download --current-platform`.
 `test/test_unit.py` needs no native library; `test/test_integration.py` runs
 against the libraries listed in `H2GIS_TEST_LIBS`, or the default one, and is
 skipped when none is found. Building the wheels and releasing: see

@@ -1,11 +1,17 @@
 # Changelog
 
-## 2.0.0
 
-A rewrite: `h2gis` is now a DB-API 2.0 (PEP 249) driver with an API closed
-to psycopg 3 syntax. **The `H2GIS` class of the 0.0.x versions is removed.**
+- The native libraries are no longer committed in `native/`: they are
+  downloaded from the GitHub release of H2GIS named in `native/H2GIS_RELEASE`
+  (`python tools/update_native.py --download`), and checked against its
+  `SHA256SUMS`. The wheels still ship the library of their platform.
 
-### Added
+- Conda packages (`recipe/`, rattler-build), one per platform and Python
+  version, published on anaconda.org.
+- GitHub Actions CI (`.github/workflows/ci.yml`): tests on Linux, Windows and
+  macOS, wheels tested after installation, sdist, conda packages;
+  publication on PyPI (trusted publishing), TestPyPI, anaconda.org and a
+  GitHub release, on a tag or a manual run.
 
 - `h2gis.connect()`, `Connection`, `Cursor`: `conn.execute()` returning the
   cursor, `fetchone/fetchmany/fetchall`, iteration, `description`, `rowcount`,
@@ -33,28 +39,4 @@ to psycopg 3 syntax. **The `H2GIS` class of the 0.0.x versions is removed.**
   `tools/update_native.py`); `pyproject.toml` replaces `setup.py`; GitHub
   Actions CI (tests on the three platforms, wheels, PyPI publishing on tags).
 
-### Removed
 
-- The `H2GIS` class and its methods.
-
-### Migration from 0.0.x
-
-| 0.0.x | 2.0 |
-|---|---|
-| `db = H2GIS("/path/db", "sa", "")` | `conn = h2gis.connect("/path/db", "sa", "")` |
-| `H2GIS(lib_path=...)` | `h2gis.connect(..., lib_path=...)` or `H2GIS_LIB_PATH` |
-| `db.execute(sql)` | `conn.execute(sql)`; parameters: `conn.execute(sql, [a, b])` with `%s` |
-| `db.fetch(sql)` → `{column: [values]}` | `conn.execute(sql).fetchall()` → rows, or `cur.fetch_columns()` → `{column: [values]}` |
-| `gpd.GeoDataFrame(db.fetch(sql), geometry="THE_GEOM", crs=...)` | `h2gis.read_gdf(conn, sql)` |
-| `db.commit()`, `db.rollback()` | same, or `with conn.transaction():` |
-| `db.isConnected()`, `db.ping()` | `not conn.closed` |
-| `db.close()` | `conn.close()` or `with h2gis.connect(...) as conn:` |
-| `db.deleteAndClose()` | `conn.delete_database()` |
-| `RuntimeError` | `h2gis.Error` subclasses |
-
-Behaviour changes to watch:
-
-- Statements run in a transaction: call `conn.commit()`, use `with conn:`, or
-  connect with `autocommit=True` to get the 0.0.x behaviour.
-- A relative database path no longer needs `./`, and a trailing `.mv.db` is
-  removed.

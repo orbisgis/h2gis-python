@@ -134,7 +134,8 @@ class NativeLib:
         if not os.path.exists(path):
             raise errors.InterfaceError(
                 f"native H2GIS library not found: {path!r}. Install the h2gis "
-                "package with its 'lib' folder, set H2GIS_LIB_PATH or pass lib_path=")
+                "package with its 'lib' folder, set H2GIS_LIB_PATH or pass lib_path=; "
+                "from a clone: python tools/update_native.py --download --current-platform")
         self.path = path
         try:
             self._lib = ctypes.CDLL(path)

@@ -1,0 +1,85 @@
+# conda package of h2gis-python, built with rattler-build:
+#
+#   python tools/update_native.py --download --current-platform
+#   H2GIS_VERSION=2.0.0 rattler-build build --recipe recipe/
+#
+# One package per platform and Python version (recipe/variants.yaml), with
+# the native H2GIS library of the platform, taken from native/: the
+# library is a GraalVM native image, it cannot be built by conda.
+context:
+  version: ${{ env.get("H2GIS_VERSION", default="2.0.0") }}
+
+package:
+  name: h2gis
+  version: ${{ version }}
+
+source:
+  path: ../
+  # native/ is in .gitignore: the library must be copied anyway
+  use_gitignore: false
+  filter:
+    exclude:
+      - .git/
+      - dist/
+      - build/
+      - "**/__pycache__/"
+
+build:
+  number: 0
+  # The GraalVM library depends on the system C library only: no relinking
+  # (rpath, install name) and no search for the build prefix in it
+  dynamic_linking:
+    binary_relocation: false
+  prefix_detection:
+    ignore: true
+  script:
+    - if: unix
+      then:
+        - mkdir -p h2gis/lib
+    - if: linux and x86_64
+      then:
+        - cp native/linux-x86_64/h2gis.so h2gis/lib/
+    - if: osx and arm64
+      then:
+        - cp native/macos-arm64/h2gis.dylib h2gis/lib/
+    - if: win
+      then:
+        - if not exist h2gis\lib mkdir h2gis\lib
+        - copy native\windows-x86_64\h2gis.dll h2gis\lib\
+    - ${{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools >=77
+    - wheel
+  run:
+    - python
+    - shapely >=2.0
+    - numpy
+
+tests:
+  - python:
+      imports:
+        - h2gis
+      pip_check: true
+  - script:
+      - python -c "import h2gis, os, tempfile; conn = h2gis.connect(os.path.join(tempfile.mkdtemp(), 'db')); print(conn.execute('SELECT H2GISVERSION()').fetchone()); conn.close()"
+
+about:
+  homepage: https://github.com/orbisgis/h2gis-python
+  repository: https://github.com/orbisgis/h2gis-python
+  documentation: https://github.com/orbisgis/h2gis-python/blob/main/docs/DBAPI.md
+  license: LGPL-3.0-only
+  license_file: license-file.md
+  summary: DB-API 2.0 driver for the H2GIS spatial database, through a native GraalVM library
+  description: |
+    h2gis runs the H2GIS spatial database (H2 with spatial functions) inside the
+    Python process, through a native library compiled with GraalVM: no JVM. It
+    provides a DB-API 2.0 driver with a psycopg 3 style API, and reads query
+    results as GeoDataFrames.
+
+extra:
+  recipe-maintainers:
+    - ebocher

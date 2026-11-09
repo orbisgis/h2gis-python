@@ -7,3 +7,10 @@ h2gis.egg-info
 __pycache__/
 *.pyc
 .pytest_cache/
+# Native libraries: downloaded from a release of H2GIS
+# (python tools/update_native.py --download), never committed
+native/*/
+native/SHA256SUMS
+*.so
+*.dll
+*.dylib

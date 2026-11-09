@@ -13,6 +13,7 @@
 ```bash
 pip install h2gis                # from PyPI
 pip install "h2gis[geopandas]"   # with pandas and GeoPandas
+conda install -c orbisgis -c conda-forge h2gis   # with conda
 pip install .                    # from a clone: no native library, see DEPLOY.md
 ```
 

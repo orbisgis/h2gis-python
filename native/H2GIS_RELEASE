@@ -1,0 +1,5 @@
+# Release of orbisgis/H2GIS whose native libraries h2gis-python uses, as
+# h2gis-gdal does: graalvm-snapshot (the build of master) for now, a version
+# tag (e.g. v2.2.6) once H2GIS publishes its libraries in its releases.
+# python tools/update_native.py --download takes them from it.
+graalvm-snapshot
