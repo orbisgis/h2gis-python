@@ -10,8 +10,12 @@ H2GIS library of that platform :
 | `py3-none-macosx_11_0_arm64` | `h2gis.dylib` (Apple silicon) |
 
 plus a source distribution without native library, and one conda package
-per platform and Python version (3.9 to 3.13), built with
-[rattler-build](https://rattler.build) from `recipe/`.
+per platform, built with [rattler-build](https://rattler.build) from
+`recipe/`. The conda packages are `noarch: python` (one package for Python
+3.9 and later, as the Python code is the same for all versions), each
+restricted to its system by the virtual package `__linux`, `__osx` or `__win`,
+and named after it: `h2gis-2.0.0-linux_pyh<hash>_0.conda`, `osx_...`,
+`win_...`.
 
 ## Native libraries
 
@@ -49,9 +53,8 @@ On every push and pull request:
    `tools/build_wheel.py`, install it and run the test suite against the
    installed package (fails if the library of the platform is missing).
 3. **sdist**: build the source distribution and check it (`twine check`).
-4. **conda**: for each platform, build the conda packages of `recipe/` (one
-   per Python version, `recipe/variants.yaml`) and test them (import, a
-   query with the native library, `pip check`).
+4. **conda**: for each platform, build the conda package of `recipe/` and
+   test it (import, a query with the native library, `pip check`).
 
 Publication, on a `v*` tag (it must be `v` + `__version__`), or on a manual
 run (*Actions > CI > Run workflow*, input `publish`):

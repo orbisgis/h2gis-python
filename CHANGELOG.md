@@ -6,8 +6,9 @@
   (`python tools/update_native.py --download`), and checked against its
   `SHA256SUMS`. The wheels still ship the library of their platform.
 
-- Conda packages (`recipe/`, rattler-build), one per platform and Python
-  version, published on anaconda.org.
+- Conda packages (`recipe/`, rattler-build): one `noarch: python` package
+  per platform (Linux, macOS, Windows), for Python 3.9 and later, published
+  on anaconda.org.
 - GitHub Actions CI (`.github/workflows/ci.yml`): tests on Linux, Windows and
   macOS, wheels tested after installation, sdist, conda packages;
   publication on PyPI (trusted publishing), TestPyPI, anaconda.org and a

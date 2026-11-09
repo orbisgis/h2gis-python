@@ -2,7 +2,7 @@
 #
 # On every push and pull request: tests on Linux, Windows and macOS, one
 # wheel per platform (tested after installation), the source distribution
-# and the conda packages (one per platform and Python version, tested).
+# and the conda packages (one per platform, for every Python version, tested).
 #
 # Publication, on a tag v* (it must match __version__ of h2gis/__init__.py),
 # or on a manual run (Actions > CI > Run workflow):
@@ -153,7 +153,7 @@ jobs:
           environment-name: build
           init-shell: bash
           create-args: rattler-build
-      - name: Build and test the packages (one per Python version)
+      - name: Build and test the package (noarch python, for this system)
         env:
           H2GIS_VERSION: ${{ needs.version.outputs.version }}
         run: rattler-build build --recipe recipe/ --output-dir conda-out -c conda-forge

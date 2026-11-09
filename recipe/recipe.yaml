@@ -3,11 +3,17 @@
 #   python tools/update_native.py --download --current-platform
 #   H2GIS_VERSION=2.0.0 rattler-build build --recipe recipe/
 #
-# One package per platform and Python version (recipe/variants.yaml), with
-# the native H2GIS library of the platform, taken from native/: the
-# library is a GraalVM native image, it cannot be built by conda.
+# One package per platform, for every Python version (noarch: python, as the
+# Python code is the same for all versions), with the native H2GIS library of
+# the platform, taken from native/: the library is a GraalVM native image, it
+# cannot be built by conda. The virtual packages __linux, __osx and __win
+# install each package on its system only.
 context:
   version: ${{ env.get("H2GIS_VERSION", default="2.0.0") }}
+  build_number: 0
+  # The system of the package, in its build string: the three noarch
+  # packages of a version must have different file names
+  system: ${{ "linux" if linux else ("osx" if osx else "win") }}
 
 package:
   name: h2gis
@@ -25,7 +31,9 @@ source:
       - "**/__pycache__/"
 
 build:
-  number: 0
+  number: ${{ build_number }}
+  string: ${{ system }}_pyh${{ hash }}_${{ build_number }}
+  noarch: python
   # The GraalVM library depends on the system C library only: no relinking
   # (rpath, install name) and no search for the build prefix in it
   dynamic_linking:
@@ -50,14 +58,21 @@ build:
 
 requirements:
   host:
-    - python
+    - python >=3.9
     - pip
     - setuptools >=77
     - wheel
   run:
-    - python
+    - python >=3.9
     - shapely >=2.0
     - numpy
+    # The system of the native library
+    - if: linux
+      then: __linux
+    - if: osx
+      then: __osx
+    - if: win
+      then: __win
 
 tests:
   - python:

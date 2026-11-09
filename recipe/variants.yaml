@@ -1,8 +1,0 @@
-# The Python versions of the conda packages: one package per version, since
-# conda installs a package in the site-packages of its Python version
-python:
-  - "3.9"
-  - "3.10"
-  - "3.11"
-  - "3.12"
-  - "3.13"
