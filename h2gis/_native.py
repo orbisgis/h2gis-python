@@ -32,7 +32,7 @@ from typing import Dict, List, Optional
 from . import errors
 
 __all__ = ["NativeLib", "get_lib", "default_library_path", "native_platform",
-           "library_file_name", "MIN_C_API_VERSION"]
+           "library_file_name", "native_versions", "MIN_C_API_VERSION"]
 
 #: Oldest version of the C interface this driver works with.
 MIN_C_API_VERSION = 2
@@ -82,6 +82,16 @@ _FUNCTIONS = {
     "h2gis_get_metadata_json": ([_Thread_p, _jlong], _c_void_p),
 }
 
+
+# Functions of newer versions of the C API, bound when the library has them
+_OPTIONAL_FUNCTIONS = {
+    "h2gis_get_versions": ([_Thread_p], _c_void_p),  # C API 4
+}
+
+# H2 error codes of a database file that the H2 of the library cannot read:
+# 90030 (pages of some other versions read as corrupted, e.g. a database of
+# H2 2.4.240 read by 2.5.252) and 90048 (unsupported file format)
+_OTHER_VERSION_ERRORS = ("[90030-", "[90048-")
 
 _LIB_NAMES = {"Windows": "h2gis.dll", "Darwin": "h2gis.dylib"}
 
@@ -152,6 +162,11 @@ class NativeLib:
         for name, (args, res) in _FUNCTIONS.items():
             fn = getattr(self._lib, name)
             fn.argtypes, fn.restype = args, res
+        for name, (args, res) in _OPTIONAL_FUNCTIONS.items():
+            fn = getattr(self._lib, name, None)
+            if fn is not None:
+                fn.argtypes, fn.restype = args, res
+        self._versions: Optional[Dict[str, object]] = None
 
         self._lib.graal_create_isolate.argtypes = [
             _c_void_p, ctypes.POINTER(_Isolate_p), ctypes.POINTER(_Thread_p)]
@@ -218,8 +233,58 @@ class NativeLib:
     def connect(self, path: str, user: str, password: str) -> int:
         handle = self._lib.h2gis_connect(self.thread, _encode(path), _encode(user), _encode(password))
         if not handle:
-            self._raise("connection", errors.OperationalError)
+            message = self.last_error()
+            if not message:
+                raise errors.OperationalError("connection failed (no error message from the native library)")
+            raise errors.from_native_message(message + self._other_version_hint(message),
+                                             errors.OperationalError)
         return handle
+
+    def _other_version_hint(self, message: str) -> str:
+        """Explanation of a database written by another version of H2, unless
+        the library gives it (C API 4)."""
+        if not any(code in message for code in _OTHER_VERSION_ERRORS) or "another version of H2" in message:
+            return ""
+        versions = self.versions()
+        return (f" The database may have been written by another version of H2: this library embeds "
+                f"H2 {versions.get('h2', 'unknown')} (H2GIS {versions.get('h2gis', 'unknown')}), which "
+                "cannot read the files of some other versions. Open it with the version of H2 that wrote "
+                "it and migrate it: SCRIPT TO a file, then RUNSCRIPT FROM it in a database created by "
+                "h2gis.")
+
+    # -- versions ---------------------------------------------------------------
+
+    def versions(self) -> Dict[str, object]:
+        """Versions built into the library: ``{"cApi": 4, "h2gis": "2.2.6",
+        "h2": "2.5.252", "jts": "1.20.0"}``, read once. From
+        ``h2gis_get_versions()`` (C API 4), else from H2 itself on an
+        in-memory database (no ``"jts"`` then)."""
+        if self._versions is None:
+            fn = getattr(self._lib, "h2gis_get_versions", None)
+            if fn is not None:
+                versions = json.loads(self._take_string(fn(self.thread)))
+            else:
+                versions = {"cApi": self.version}
+                conn = self._lib.h2gis_connect(self.thread, _encode("mem:"), _encode("sa"), _encode(""))
+                if conn:
+                    try:
+                        rs = self._lib.h2gis_fetch(self.thread, conn,
+                                                   _encode("SELECT H2VERSION(), H2GISVERSION()"))
+                        if rs:
+                            try:
+                                from ._buffer import decode
+                                chunk = decode(self.fetch_all(rs))
+                                if chunk.row_count == 1:
+                                    versions.update(h2=str(chunk.columns[0][0]).strip(),
+                                                    h2gis=str(chunk.columns[1][0]).strip())
+                            finally:
+                                self.close_query(rs)
+                    finally:
+                        self.close_connection(conn)
+                else:
+                    self.last_error()  # clear it
+            self._versions = versions
+        return dict(self._versions)
 
     def close_connection(self, conn: int) -> None:
         self._lib.h2gis_close_connection(self.thread, conn)
@@ -356,6 +421,13 @@ def _encode(text: str) -> bytes:
 
 _LIBS: Dict[str, NativeLib] = {}
 _LIBS_LOCK = threading.Lock()
+
+
+def native_versions(lib_path: Optional[str] = None) -> Dict[str, object]:
+    """Versions built into the native library, without opening a database:
+    ``{"cApi": 4, "h2gis": "2.2.6", "h2": "2.5.252", "jts": "1.20.0"}``. H2 does
+    not read the database files of some other versions of H2."""
+    return get_lib(lib_path).versions()
 
 
 def get_lib(path: Optional[str] = None) -> NativeLib:

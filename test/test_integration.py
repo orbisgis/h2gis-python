@@ -158,7 +158,7 @@ def test_nulls_of_every_type(conn):
     rows = conn.execute("SELECT * FROM N").fetchall()
     assert rows[0] == (None,) * 12
     assert conn.execute("SELECT I, L, R, D, B, S, BIN FROM N WHERE I = 0").fetchone() == \
-        (0, 0, 0.0, 0.0, False, "", b"")
+           (0, 0, 0.0, 0.0, False, "", b"")
 
 
 def test_binary_decimal_json_uuid(conn, mode):
@@ -195,6 +195,37 @@ def test_executemany_batches(conn, mode, monkeypatch):
     with pytest.raises(errors.UniqueViolation):
         cur.executemany("INSERT INTO B VALUES (%s, %s, %s)", [(100, None, "x"), (1, None, "dup")],
                         prepare=mode)
+
+
+def test_native_versions(conn, lib_path):
+    versions = h2gis.native_versions(lib_path)
+    assert versions["cApi"] == conn.native_version
+    h2 = conn.execute("SELECT H2VERSION()").fetchone()[0]
+    assert versions["h2"] == h2
+    assert versions["h2gis"] and versions["h2gis"] == versions["h2gis"].strip()
+    assert conn.native_versions == versions
+
+
+def test_database_of_another_h2_version(lib_path, tmp_path):
+    # Pages that H2 cannot read are reported as corrupted (90030): the error
+    # explains that the database may come from another version of H2
+    src = tmp_path / "src"
+    with h2gis.connect(src, lib_path=lib_path) as c:
+        c.execute("CREATE TABLE T(ID INT, V VARCHAR)")
+        c.execute("INSERT INTO T SELECT X, REPEAT('x', 200) FROM SYSTEM_RANGE(1, 2000)")
+    data = bytearray((tmp_path / "src.mv.db").read_bytes())
+    for i in range(len(data) - 60000, len(data) - 4096, 3):
+        data[i] ^= 0x5A
+    (tmp_path / "bad.mv.db").write_bytes(bytes(data))
+    try:
+        h2gis.connect(tmp_path / "bad", lib_path=lib_path).close()
+    except errors.DatabaseError as exc:
+        if exc.h2_code != 90030:
+            pytest.skip(f"the damaged file gives another error ({exc.h2_code})")
+        assert "another version of H2" in str(exc)
+        assert h2gis.native_versions(lib_path)["h2"] in str(exc)
+    else:
+        pytest.skip("the damaged file opens")
 
 
 def test_old_library_is_refused():
@@ -406,7 +437,7 @@ def test_read_gdf(places):
 
 def test_read_gdf_options(places):
     gdf = h2gis.read_gdf(places, "SELECT ID, ST_Buffer(THE_GEOM, 1) AS B, THE_GEOM FROM PLACE_NAMES "
-                         "WHERE ID = %s", [1], geometry="THE_GEOM", crs="EPSG:3857")
+                                 "WHERE ID = %s", [1], geometry="THE_GEOM", crs="EPSG:3857")
     assert gdf.geometry.name == "THE_GEOM" and gdf.crs.to_epsg() == 3857
     assert gdf["B"].crs.to_epsg() == 4326
     empty = h2gis.read_gdf(places, "SELECT * FROM PLACE_NAMES WHERE ID < 0")

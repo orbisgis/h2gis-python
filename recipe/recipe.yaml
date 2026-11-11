@@ -9,7 +9,7 @@
 # cannot be built by conda. The virtual packages __linux, __osx and __win
 # install each package on its system only.
 context:
-  version: ${{ env.get("H2GIS_VERSION", default="2.0.0") }}
+  version: ${{ env.get("H2GIS_VERSION", default="2.1.0") }}
   build_number: 0
   # The system of the package, in its build string: the three noarch
   # packages of a version must have different file names

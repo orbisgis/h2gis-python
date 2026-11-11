@@ -19,6 +19,38 @@ with h2gis.connect("mem:") as conn:
     print(conn.native_version, conn.lib_path)
 ```
 
+## Versions of H2
+
+The library embeds one version of H2, which does not read the database files
+of some other versions of H2. For example a database written by H2 2.4.240 is reported as
+corrupted by H2 2.5.252 (error 90030), both versions writing the same file
+format number. `h2gis.native_versions()` tells the versions built into the
+library, without opening a database:
+
+```python
+>>> h2gis.native_versions()
+{'cApi': 4, 'h2gis': '2.2.6', 'h2': '2.5.252', 'jts': '1.20.0'}
+```
+
+It uses `h2gis_get_versions()` (C API 4), or asks H2 with an older library
+(no `jts` then). `Connection.native_versions` gives the same.
+
+When `connect()` fails on a database written by another version of H2 (error
+90030 or 90048), the `DatabaseError` says so, with the versions of the
+library: write the database with the same version of H2, or migrate it
+(`SCRIPT TO` with its own version of H2, then `RUNSCRIPT FROM` in a database
+created by h2gis).
+
+To migrate the database uses the H2 java implementation.
+
+[H2MigrationTool](https://github.com/manticore-projects/H2MigrationTool) is
+another way to migrate a database between versions of H2.
+
+```bash
+java -cp h2-2.4.240.jar org.h2.tools.Shell -url jdbc:h2:/path/to/mydb -user sa -sql "SELECT H2VERSION()"
+ogrinfo -ro mydb.mv.db
+```
+
 ## Choosing the library
 
 1. `lib_path=` argument of `h2gis.connect()`

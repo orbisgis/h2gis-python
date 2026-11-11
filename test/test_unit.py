@@ -106,6 +106,18 @@ def test_error_mapping_english():
     assert str(exc).startswith('Table "NOPE" not found')
 
 
+def test_error_mapping_code_before_explanation():
+    # A library of C API 4 explains a database of another version of H2 after the code
+    msg = ('Failed to open H2 connection: File corrupted while reading record: "/tmp/db.mv.db". '
+           'Possible solution: use the recovery tool [90030-252] The database may have been written '
+           'by another version of H2: this library embeds H2 2.5.252 (H2GIS 2.2.6), which cannot read '
+           'the files of some other versions.')
+    exc = errors.from_native_message(msg)
+    assert exc.h2_code == 90030
+    assert isinstance(exc, errors.DatabaseError)
+    assert "another version of H2" in str(exc)
+
+
 def test_error_mapping_localized():
     msg = ("Failed to execute update: Violation d'index unique ou clé primaire: \"PK\"\n"
            'Unique index or primary key violation: "PK"; SQL statement:\n'
@@ -239,7 +251,7 @@ def test_temporal_loader(text, expected):
 
 def test_type_loaders():
     assert adapters.loader(ColumnType.DECIMAL, "NUMERIC")("12345678901234.1234567891") == \
-        decimal.Decimal("12345678901234.1234567891")
+           decimal.Decimal("12345678901234.1234567891")
     assert adapters.loader(ColumnType.DECIMAL, "DECFLOAT")("NaN").is_nan()
     assert adapters.loader(ColumnType.JSON, "JSON")('{"a": [1, 2]}') == {"a": [1, 2]}
     u = adapters.loader(ColumnType.UUID, "UUID")("123e4567-e89b-12d3-a456-426614174000")

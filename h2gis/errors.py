@@ -229,6 +229,9 @@ _BY_CLASS = {
 }
 
 _CODE_RE = re.compile(r"\[(\d{5})-\d+\]\s*$")
+# The H2 code of a message: its last "[code-build]", which is followed by an
+# explanation for a database written by another version of H2
+_CODE_ANY_RE = re.compile(r"\[(\d{5})-\d+\]")
 _PREFIX_RE = re.compile(r"^(Failed to [^:]*|[A-Z][a-z]+ [a-z ]+failed): ")
 
 
@@ -246,8 +249,8 @@ def lookup(h2_code: Optional[int]) -> Type[Error]:
 def from_native_message(message: str, default: Type[Error] = DatabaseError) -> Error:
     """Build the right exception from a message returned by ``h2gis_get_last_error``."""
     message = (message or "").strip()
-    match = _CODE_RE.search(message)
-    code = int(match.group(1)) if match else None
+    codes = _CODE_ANY_RE.findall(message)
+    code = int(codes[-1]) if codes else None
     cls = lookup(code) if code is not None else default
     sqlstate = _STATE_BY_CODE.get(code, str(code)) if code is not None else None
     # Drop the "Failed to execute query: " prefix added by the C interface and,

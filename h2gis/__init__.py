@@ -38,13 +38,14 @@ import time as _time
 from . import errors, rows, sql
 from .adapt import AdaptersMap, ColumnType, Geometry, Json, adapters
 from .connection import Connection, Rollback, Transaction, connect
+from ._native import native_versions
 from .cursor import Column, Cursor
 from .dataframe import read_df, read_gdf, to_h2gis
 from .errors import (DatabaseError, DataError, Error, IntegrityError, InterfaceError,
                      InternalError, NotSupportedError, OperationalError, ProgrammingError,
                      Warning)
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # --- PEP 249 module interface ------------------------------------------------
 
@@ -102,7 +103,7 @@ def TimestampFromTicks(ticks: float) -> _dt.datetime:
 
 
 __all__ = [
-    "connect", "Connection", "Cursor", "Column", "Transaction", "Rollback",
+    "connect", "Connection", "Cursor", "Column", "Transaction", "Rollback", "native_versions",
     "read_df", "read_gdf", "to_h2gis", "Geometry", "Json", "AdaptersMap", "adapters",
     "errors", "rows", "sql",
     "apilevel", "threadsafety", "paramstyle",

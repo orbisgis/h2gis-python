@@ -213,6 +213,13 @@ class Connection:
         return self._lib.version
 
     @property
+    def native_versions(self) -> dict:
+        """Versions built into the native library: ``{"cApi": 4, "h2gis":
+        "2.2.6", "h2": "2.5.252", "jts": "1.20.0"}`` (see
+        :func:`h2gis.native_versions`)."""
+        return self._lib.versions()
+
+    @property
     def lib_path(self) -> str:
         """Path of the native library."""
         return self._lib.path
