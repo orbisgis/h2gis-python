@@ -104,6 +104,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.9", "3.13"]
+        # Python 3.9 (end of life) is not built for Ubuntu 26.04
+        # (ubuntu-latest): it is tested on Ubuntu 24.04
+        exclude:
+          - { os: ubuntu-latest, python: "3.9" }
+        include:
+          - { os: ubuntu-24.04, python: "3.9" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
