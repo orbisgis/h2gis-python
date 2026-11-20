@@ -11,8 +11,11 @@
 #   ANACONDA_API_KEY is set) and a GitHub release with all the packages,
 #   tagged v<__version__> on the commit built.
 #
-# The native libraries come from the release of H2GIS named in
-# native/H2GIS_RELEASE (python tools/update_native.py --download).
+# The native libraries come from a GitHub release of H2GIS (python
+# tools/update_native.py --download <release>), chosen by the version job:
+# - manual run: the H2GIS version chosen in the form (by default the one of
+#   native/H2GIS_RELEASE);
+# - push, pull request, tag v*: the release named in native/H2GIS_RELEASE.
 
 name: CI
 
@@ -28,6 +31,21 @@ on:
         type: choice
         options: [none, testpypi, release]
         default: none
+      h2gis:
+        description: "H2GIS native libraries: native/H2GIS_RELEASE (committed), latest = the last release of H2GIS, graalvm-snapshot = the build of master"
+        type: choice
+        # GitHub cannot fill this list from the releases of H2GIS: add the
+        # new versions here, or give one in the field below.
+        options:
+          - native/H2GIS_RELEASE
+          - latest
+          - graalvm-snapshot
+          - v2.2.6
+        default: native/H2GIS_RELEASE
+      h2gis_other:
+        description: "Another H2GIS version (e.g. v2.2.7), used instead of the list above if given"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -38,13 +56,39 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      h2gis: ${{ steps.h2gis.outputs.release }}
     steps:
       - uses: actions/checkout@v4
+      - id: h2gis
+        name: H2GIS native libraries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          H2GIS_REPO: orbisgis/h2gis
+          CHOSEN: ${{ github.event_name == 'workflow_dispatch' && (inputs.h2gis_other || inputs.h2gis) || 'native/H2GIS_RELEASE' }}
+        run: |
+          release="$(echo "$CHOSEN" | tr -d '[:space:]')"
+          if [ "$release" = "native/H2GIS_RELEASE" ]; then
+            release=$(grep -v '^#' native/H2GIS_RELEASE | tr -d '[:space:]')
+          fi
+          if [ "$release" = "latest" ]; then
+            # The last release of H2GIS (graalvm-snapshot is a pre-release: excluded)
+            release=$(gh release view -R "$H2GIS_REPO" --json tagName -q .tagName)
+          elif [[ "$release" =~ ^[0-9] ]]; then
+            release="v$release"
+          fi
+          if ! gh release view "$release" -R "$H2GIS_REPO" --json assets -q '.assets[].name' \
+              | grep -x 'h2gis-linux-x86_64.so' > /dev/null; then
+            echo "::error::The H2GIS release $release has no native libraries: run the workflow \"CI GraalVM\" of H2GIS on the tag $release (Actions > CI GraalVM > Run workflow, Use workflow from: $release), or choose another version."
+            exit 1
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "::notice::H2GIS native libraries: $release"
+          echo "H2GIS native libraries: **$release**" >> "$GITHUB_STEP_SUMMARY"
       - id: version
         run: |
           version=$(python -c "import re; print(re.search(r'^__version__ = [\"\']([^\"\']+)', open('h2gis/__init__.py').read(), re.M).group(1))")
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "h2gis $version, native libraries of the H2GIS release $(grep -v '^#' native/H2GIS_RELEASE)"
+          echo "h2gis $version, native libraries of the H2GIS release ${{ steps.h2gis.outputs.release }}"
           # A tag must be the version of the package
           if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
             echo "The tag $GITHUB_REF_NAME is not v$version (__version__ of h2gis/__init__.py)"
@@ -53,6 +97,7 @@ jobs:
 
   tests:
     name: Tests ${{ matrix.os }} Python ${{ matrix.python }}
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -65,7 +110,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Download the native library
-        run: python tools/update_native.py --download --current-platform
+        run: python tools/update_native.py --download "${{ needs.version.outputs.h2gis }}" --current-platform
       - name: Install
         run: python -m pip install -e ".[test]"
       - name: Test
@@ -73,6 +118,7 @@ jobs:
 
   wheels:
     name: Wheel ${{ matrix.tag }}
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -90,7 +136,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Download the native library
-        run: python tools/update_native.py --download --current-platform
+        run: python tools/update_native.py --download "${{ needs.version.outputs.h2gis }}" --current-platform
       - name: Build the wheel
         run: |
           python -m pip install build wheel
@@ -147,7 +193,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Download the native library
-        run: python tools/update_native.py --download --current-platform
+        run: python tools/update_native.py --download "${{ needs.version.outputs.h2gis }}" --current-platform
       - uses: mamba-org/setup-micromamba@v2
         with:
           environment-name: build
@@ -257,6 +303,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TAG: v${{ needs.version.outputs.version }}
+      H2GIS_RELEASE: ${{ needs.version.outputs.h2gis }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -270,10 +317,16 @@ jobs:
           ls -l dist
           cd dist
           sha256sum * > SHA256SUMS
+          h2gis_line="H2GIS native libraries: [$H2GIS_RELEASE](https://github.com/orbisgis/h2gis/releases/tag/$H2GIS_RELEASE)"
           if gh release view "$TAG" > /dev/null 2>&1; then
             # A publication run again: the files of the release are replaced
             gh release upload "$TAG" * --clobber
+            # Update the H2GIS line of the notes (or add it)
+            notes=$(gh release view "$TAG" --json body -q .body | grep -v '^H2GIS native libraries: ' || true)
+            gh release edit "$TAG" --notes "$(printf '%s\n\n%s' "$h2gis_line" "$notes")"
           else
             # --target: on a manual run, the tag is created on the commit built
-            gh release create "$TAG" * --target "$GITHUB_SHA" --title "h2gis $TAG" --generate-notes
+            # --notes is put before the generated notes
+            gh release create "$TAG" * --target "$GITHUB_SHA" --title "h2gis $TAG" \
+              --notes "$h2gis_line" --generate-notes
           fi
