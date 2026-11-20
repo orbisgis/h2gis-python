@@ -45,7 +45,7 @@ from .errors import (DatabaseError, DataError, Error, IntegrityError, InterfaceE
                      InternalError, NotSupportedError, OperationalError, ProgrammingError,
                      Warning)
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 # --- PEP 249 module interface ------------------------------------------------
 
